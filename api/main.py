@@ -14,6 +14,7 @@ from api.deps import AppState, build_state
 from src.feedback import accuracy_summary, log_feedback, new_recommendation_id
 from src.features import episode_features
 from src.model import predict_risk, shap_top_drivers
+from src.registry import latest as registry_latest
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -34,7 +35,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Grade Change Intelligence API",
-              version="1.0.0", lifespan=lifespan)
+              version="1.1.0", lifespan=lifespan)
 
 
 def _risk_level(risk: float) -> str:
@@ -56,6 +57,15 @@ def _predict(episode_id: int, at_step: int):
 @app.get("/health")
 def health():
     return {"status": "ok", "model_auc": round(state.bundle["auc"], 3)}
+
+
+@app.get("/model/info")
+def model_info():
+    """Metadata for the currently deployed model version (from registry)."""
+    meta = registry_latest()
+    if meta is None:
+        raise HTTPException(404, "No registered model")
+    return meta
 
 
 @app.get("/episodes", response_model=list[schemas.EpisodeMeta])
