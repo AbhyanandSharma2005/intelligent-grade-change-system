@@ -7,9 +7,11 @@ from src.config import (ACTUATOR_TAGS, DATA_PATH, DEVIATION_LIMIT_PCT,
                         META_PATH, MODEL_DIR, QUALITY_TAG, TRIGGER_STEP)
 from src.correlations import discover_new_correlations
 from src.features import episode_features
-from src.feedback import (accuracy_summary, feedback_log, log_feedback,
-                          new_recommendation_id)
+from src.feedback import (accept_rate_trend, accuracy_summary, feedback_log,
+                          log_feedback, new_recommendation_id)
+from src.forecast import forecast_deviation, load_forecast
 from src.model import load_risk_model, predict_risk, shap_top_drivers
+from src.optimizer import optimize_setpoints
 from src.recommender import SetpointRecommender
 
 st.set_page_config(page_title="Grade Change Intelligence", layout="wide")
@@ -22,10 +24,11 @@ def load_all():
     bundle = load_risk_model(MODEL_DIR)
     table = pd.read_parquet(f"{MODEL_DIR}/feature_table.parquet")
     rec = SetpointRecommender(table, meta, episodes)
-    return episodes, meta, bundle, rec
+    forecast_bundle = load_forecast(MODEL_DIR)  # None if not trained yet
+    return episodes, meta, bundle, rec, forecast_bundle
 
 
-episodes, meta, bundle, recommender = load_all()
+episodes, meta, bundle, recommender, forecast_bundle = load_all()
 
 st.title("Grade Change Intelligence — MD Transition Co-pilot")
 st.caption("Predictive + explainable layer on top of the QCS grade change program")
@@ -70,29 +73,74 @@ with c3:
     for f, v in drivers:
         st.write(f"- `{f}` ({'+' if v > 0 else ''}{v:.3f})")
 
-# ── Recommendations ─────────────────────────────────────────────────
+# ── Deviation forecast (quantile bands) ─────────────────────────────
 st.divider()
-st.subheader("Recommended corrective setpoints")
+st.subheader("Deviation forecast — if the current trend continues")
+if forecast_bundle is None:
+    st.info("Forecast model not trained yet — run `python scripts/train_forecast.py`.")
+else:
+    points = forecast_deviation(forecast_bundle, feats)
+    df_fc = pd.DataFrame(points).set_index("horizon_s")
+    st.line_chart(df_fc[["dev_pct_p10", "dev_pct_p50", "dev_pct_p90"]])
+    st.caption(f"P10 / P50 / P90 basis-weight deviation (%) at each horizon. "
+              f"Spec limit is ±{DEVIATION_LIMIT_PCT}%.")
+    if any(p["dev_pct_p50"] > DEVIATION_LIMIT_PCT for p in points):
+        st.warning("Median forecast crosses the spec limit at one or more horizons.")
+
+# ── Recommendations: retrieval (k-NN) vs optimization (SLSQP) ───────
+st.divider()
+st.subheader("Recommended corrective setpoints — retrieval vs optimization")
 if risk > 0.35:
-    recs, neighbors = recommender.recommend(feats, new_corr_tags)
-    st.caption(f"Based on nearest in-spec historical transitions: "
-               f"episodes {neighbors}")
-    for r in recs:
-        rec_id = f"{eid}-{t_now}-{r.tag}"
-        col_a, col_b, col_c = st.columns([4, 1, 1])
-        with col_a:
-            st.markdown(f"**{r.tag} → {r.value:.0f}**  {r.primary_tag}")
-            st.caption(r.reason)
-        with col_b:
-            if st.button("Accept", key=f"a-{rec_id}"):
-                log_feedback(new_recommendation_id(), eid, r.tag, r.value,
-                             r.primary_tag, True)
-                st.success("Logged")
-        with col_c:
-            if st.button("Reject", key=f"r-{rec_id}"):
-                log_feedback(new_recommendation_id(), eid, r.tag, r.value,
-                             r.primary_tag, False)
-                st.warning("Logged")
+    col_retrieval, col_opt = st.columns(2)
+
+    with col_retrieval:
+        st.markdown("#### Retrieval (k-NN)")
+        recs, neighbors = recommender.recommend(feats, new_corr_tags)
+        st.caption(f"Nearest in-spec historical transitions: episodes {neighbors}")
+        for r in recs:
+            rec_id = f"{eid}-{t_now}-{r.tag}"
+            col_a, col_b, col_c = st.columns([4, 1, 1])
+            with col_a:
+                st.markdown(f"**{r.tag} → {r.value:.0f}**  {r.primary_tag}")
+                st.caption(r.reason)
+            with col_b:
+                if st.button("Accept", key=f"a-{rec_id}"):
+                    log_feedback(new_recommendation_id(), eid, r.tag, r.value,
+                                r.primary_tag, True)
+                    st.success("Logged")
+            with col_c:
+                if st.button("Reject", key=f"r-{rec_id}"):
+                    log_feedback(new_recommendation_id(), eid, r.tag, r.value,
+                                r.primary_tag, False)
+                    st.warning("Logged")
+
+    with col_opt:
+        st.markdown("#### Optimization (scipy SLSQP)")
+        opt = optimize_setpoints(bundle, feats)
+        st.caption(f"Predicted risk: {opt['risk_before']:.0%} → "
+                  f"{opt['risk_after']:.0%} "
+                  f"({opt['risk_before'] - opt['risk_after']:+.0%})")
+        if not opt["setpoints"]:
+            st.write("No actuator setpoints available to optimize.")
+        else:
+            for sp in opt["setpoints"]:
+                bound_note = " *(at recipe limit)*" if sp["at_recipe_bound"] else ""
+                st.markdown(f"**{sp['tag']}**: {sp['current']:.0f} → "
+                           f"{sp['optimized']:.0f}{bound_note}")
+            opt_rec_id = f"{eid}-{t_now}-optimizer"
+            col_x, col_y = st.columns(2)
+            with col_x:
+                if st.button("Accept optimizer plan", key=f"a-{opt_rec_id}"):
+                    for sp in opt["setpoints"]:
+                        log_feedback(new_recommendation_id(), eid, sp["tag"],
+                                    sp["optimized"], "[Optimizer]", True)
+                    st.success("Logged")
+            with col_y:
+                if st.button("Reject optimizer plan", key=f"r-{opt_rec_id}"):
+                    for sp in opt["setpoints"]:
+                        log_feedback(new_recommendation_id(), eid, sp["tag"],
+                                    sp["optimized"], "[Optimizer]", False)
+                    st.warning("Logged")
 else:
     st.info("Risk below action threshold — no corrective action recommended.")
 
@@ -116,3 +164,13 @@ else:
     st.dataframe(acc, use_container_width=True)
     with st.expander("Full feedback log"):
         st.dataframe(feedback_log(), use_container_width=True)
+
+st.markdown("#### Feedback loop: accept-rate trend")
+trend_df = accept_rate_trend()
+if trend_df.empty:
+    st.write("No feedback logged yet — accept/reject a few recommendations above to seed this chart.")
+else:
+    st.line_chart(trend_df.set_index("ts")["rolling_accept_rate"])
+    st.caption("Rolling 20-recommendation acceptance rate. Rejected retrieval "
+              "neighbors are down-weighted in src/recommender.py — a rising "
+              "trend here is the signal that's working.")

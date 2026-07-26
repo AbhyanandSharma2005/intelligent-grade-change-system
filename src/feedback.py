@@ -45,3 +45,17 @@ def accuracy_summary() -> pd.DataFrame:
 def feedback_log() -> pd.DataFrame:
     with _conn() as c:
         return pd.read_sql("SELECT * FROM feedback ORDER BY ts DESC", c)
+
+
+def accept_rate_trend(window: int = 20) -> pd.DataFrame:
+    """Rolling accept-rate over time, ordered oldest -> newest — the 'feedback
+    loop actually learns' chart. Shows whether down-weighting rejected
+    retrieval neighbors (see src/recommender.py) is improving acceptance
+    over time. Returns an empty DataFrame if nothing's been logged yet."""
+    df = feedback_log()
+    if df.empty:
+        return df
+    df = df.sort_values("ts").reset_index(drop=True)
+    df["accepted"] = df["accepted"].astype(int)
+    df["rolling_accept_rate"] = df["accepted"].rolling(window, min_periods=1).mean()
+    return df
