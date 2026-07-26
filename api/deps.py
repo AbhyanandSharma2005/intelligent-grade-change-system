@@ -8,6 +8,7 @@ from src.correlations import discover_new_correlations
 from src.ingestion.csv_replay import CSVReplaySource
 from src.model import load_risk_model
 from src.recommender import SetpointRecommender
+from src.forecast import load_forecast
 
 
 @dataclass
@@ -16,7 +17,7 @@ class AppState:
     bundle: dict
     recommender: SetpointRecommender
     correlations: pd.DataFrame
-
+    forecast_bundle: dict | None
 
 def build_state() -> AppState:
     source = CSVReplaySource()
@@ -29,5 +30,6 @@ def build_state() -> AppState:
     recommender = SetpointRecommender(table, meta, episodes)
     # Correlation discovery is expensive -> computed once at startup
     correlations = discover_new_correlations(episodes, shap_drivers=[])
+    forecast_bundle=load_forecast()
     return AppState(source=source, bundle=bundle,
-                    recommender=recommender, correlations=correlations)
+                    recommender=recommender, correlations=correlations,forecast_bundle=forecast_bundle)

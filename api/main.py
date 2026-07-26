@@ -15,6 +15,10 @@ from src.feedback import accuracy_summary, log_feedback, new_recommendation_id
 from src.features import episode_features
 from src.model import predict_risk, shap_top_drivers
 from src.registry import latest as registry_latest
+from src.config import DEVIATION_LIMIT_PCT
+from src.forecast import forecast_deviation
+from src.optimizer import optimize_setpoints
+
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -146,3 +150,27 @@ async def live_feed(ws: WebSocket, episode_id: int):
     except KeyError:
         await ws.send_json({"error": f"unknown episode {episode_id}"})
         await ws.close()
+
+@app.get("/optimize/{episode_id}", response_model=schemas.OptimizeResponse)
+def optimize(episode_id: int, at_step: int = 200):
+    """Constrained optimizer: setpoints minimizing predicted risk within
+    recipe limits and ramp-rate constraints."""
+    _, feats, _ = _predict(episode_id, at_step)
+    result = optimize_setpoints(state.bundle, feats)
+    return schemas.OptimizeResponse(episode_id=episode_id, at_step=at_step,
+                                    **result)
+
+
+@app.get("/forecast/{episode_id}", response_model=schemas.ForecastResponse)
+def forecast(episode_id: int, at_step: int = 200):
+    """Future basis-weight deviation if the current trend continues."""
+    if state.forecast_bundle is None:
+        raise HTTPException(503, "Forecast model not trained "
+                                 "(run scripts/train_forecast.py)")
+    _, feats, _ = _predict(episode_id, at_step)
+    points = forecast_deviation(state.forecast_bundle, feats)
+    breach = any(p["dev_pct_p50"] > DEVIATION_LIMIT_PCT for p in points)
+    return schemas.ForecastResponse(
+        episode_id=episode_id, at_step=at_step,
+        spec_limit_pct=DEVIATION_LIMIT_PCT,
+        points=points, breach_expected=breach)

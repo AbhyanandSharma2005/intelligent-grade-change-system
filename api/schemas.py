@@ -60,3 +60,32 @@ class EpisodeMeta(BaseModel):
     to_grade: str
     off_spec: bool
     time_to_stabilize_s: int
+
+class OptimizedSetpoint(BaseModel):
+    tag: str
+    current: float
+    optimized: float
+    at_recipe_bound: bool
+
+
+class OptimizeResponse(BaseModel):
+    episode_id: int
+    at_step: int
+    risk_before: float
+    risk_after: float
+    setpoints: list[OptimizedSetpoint]
+
+
+class ForecastPoint(BaseModel):
+    horizon_s: int
+    dev_pct_p10: float
+    dev_pct_p50: float
+    dev_pct_p90: float
+
+
+class ForecastResponse(BaseModel):
+    episode_id: int
+    at_step: int
+    spec_limit_pct: float
+    points: list[ForecastPoint]
+    breach_expected: bool          # P50 crosses the 2.5% limit
