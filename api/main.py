@@ -1,7 +1,7 @@
 """Grade Change Intelligence API.
 
 Run:  python -m uvicorn api.main:app --reload
-Docs: http://localhost:8000/docs
+Docs: http://localhost:8080/docs
 """
 import asyncio
 import logging

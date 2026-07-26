@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "created_utc": "2026-07-26T12:34:50.413629+00:00",
+  "training_data_sha256": "2803f2940a53880a",
+  "metrics": {
+    "auc": 0.9898119122257052,
+    "brier": 0.025988717940731744,
+    "precision_at_recall80": 1.0,
+    "n_train": 320,
+    "n_test": 80,
+    "positive_rate": 0.7275
+  }
+}
