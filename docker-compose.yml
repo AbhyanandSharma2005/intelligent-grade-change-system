@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # FastAPI service for grade change risk prediction and recommendations
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: gci-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - DATA_PATH=/app/data/episodes.parquet
+      - META_PATH=/app/data/episodes_meta.csv
+      - MODEL_DIR=/app/models
+      - FEEDBACK_DB=/app/data/feedback.db
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - gci-network
+
+  # Streamlit dashboard for operator UI
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: gci-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLE_CORS=false
+      - STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=true
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - DATA_PATH=/app/data/episodes.parquet
+      - META_PATH=/app/data/episodes_meta.csv
+      - MODEL_DIR=/app/models
+      - FEEDBACK_DB=/app/data/feedback.db
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - gci-network
+
+  # Data generation and model training service (runs once or on schedule)
+  trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: gci-trainer
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - DATA_PATH=/app/data/episodes.parquet
+      - META_PATH=/app/data/episodes_meta.csv
+      - MODEL_DIR=/app/models
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    entrypoint: ["python", "scripts/train_v2.py"]
+    profiles:
+      - training
+    networks:
+      - gci-network
+
+  # Backtest service (runs on demand)
+  backtest:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: gci-backtest
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - DATA_PATH=/app/data/episodes.parquet
+      - META_PATH=/app/data/episodes_meta.csv
+      - MODEL_DIR=/app/models
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    entrypoint: ["python", "scripts/run_backtest.py"]
+    profiles:
+      - backtest
+    networks:
+      - gci-network
+
+networks:
+  gci-network:
+    driver: bridge
+
+volumes:
+  gci-data:
+  gci-models:
