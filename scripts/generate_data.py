@@ -1,6 +1,8 @@
 """Generate the synthetic historian dataset."""
+import sys
 import argparse
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.data_generator import generate_dataset
 from src.config import DATA_PATH, META_PATH
