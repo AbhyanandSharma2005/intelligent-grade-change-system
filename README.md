@@ -13,7 +13,7 @@
 [![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[Live Demo](#-demo) · [Why This Exists](#-the-problem) · [Architecture](#-architecture) · [Quick Start](#-quick-start) · [API](#-api-reference) · [Path to Production](#-honest-path-to-production)
+[**🔴 Live Demo**](https://intelligent-grade-change-system-bc3acqzu4dg3outmzvwcdy.streamlit.app/) · [Why This Exists](#-the-problem) · [Architecture](#-architecture) · [Quick Start](#-quick-start) · [API](#-api-reference) · [Path to Production](#-honest-path-to-production)
 
 </div>
 
@@ -21,7 +21,9 @@
 
 ## 🖼 Demo
 
-> **TODO (do this before sharing the link with anyone):** record a 15–20s screen capture of the Streamlit dashboard — select an episode, scrub the time slider, and show a recommendation being generated and accepted — convert it to a GIF, drop it in `docs/demo.gif`, and embed it below. This is the single highest-leverage thing you can add; a recruiter will watch a 15-second GIF before reading a single line of text.
+**▶ [Try the live dashboard here](https://intelligent-grade-change-system-bc3acqzu4dg3outmzvwcdy.streamlit.app/)** — no install needed. Select an episode from the sidebar and scrub the time slider to see risk scores, SHAP drivers, and recommendations update live.
+
+> **TODO (do this before sharing the link with anyone):** record a 15–20s screen capture of the dashboard above — select an episode, scrub the time slider, and show a recommendation being generated and accepted — convert it to a GIF, drop it in `docs/demo.gif`, and embed it below. This is the single highest-leverage thing you can add; a recruiter will watch a 15-second GIF before reading a single line of text.
 
 ```md
 ![Grade Change Intelligence Dashboard Demo](docs/demo.gif)
@@ -386,7 +388,7 @@ Add it to `ACTUATOR_TAGS` in `src/config.py`, then retrain and redeploy.
 ## 👤 Author
 
 **Abhyanand Sharma**
-[GitHub](https://github.com/AbhyanandSharma2005) · *add your LinkedIn / portfolio / email here*
+[GitHub](https://github.com/AbhyanandSharma2005) · [LinkedIn](https://www.linkedin.com/in/abhyanand-sharma-7279182b3/) ·  · [Email](mailto:[abhyanandsharma20@gmail.com])
 
 If you're a recruiter or hiring manager reading this: the [Path to Production](#-honest-path-to-production) section above is intentionally written the way I'd present this project in a technical interview — happy to walk through any part of the architecture or modeling decisions in more depth.
 
